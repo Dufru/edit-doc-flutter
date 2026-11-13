@@ -14,9 +14,10 @@ class LoginView extends StatefulWidget {
 
 class _LoginViewState extends State<LoginView> {
   final _formKey = GlobalKey<FormState>();
-
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
+
+  bool _mostrarSenha = false;
 
   @override
   void dispose() {
@@ -25,89 +26,128 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
-  void entrar() {
-    if (_formKey.currentState!.validate()) {
-      final auth = context.read<AuthViewModel>();
+  Future<void> _entrar() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      if (auth.login(
-        _emailController.text,
-        _senhaController.text,
-      )) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
+    final auth = context.read<AuthViewModel>();
+
+    final erro = await auth.login(
+      email: _emailController.text.trim(),
+      senha: _senhaController.text,
+    );
+
+    if (!mounted) return;
+
+    if (erro != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(erro),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
+
+    final nome = auth.usuarioLogado!.nome;
+
+    Navigator.pushReplacementNamed(
+      context,
+      '/home',
+      arguments: nome,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Acesso à Biblioteca'),
-      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.library_books,
-                  size: 80,
-                  color: Colors.indigo,
-                ),
-                const SizedBox(height: 30),
-
-                TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'E-mail',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.library_books,
+                    size: 80,
+                    color: Colors.indigo,
                   ),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: validarEmail,
-                ),
+                  const SizedBox(height: 20),
 
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _senhaController,
-                  decoration: const InputDecoration(
-                    labelText: 'Senha',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
+                  Text(
+                    'Biblioteca Digital',
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  obscureText: true,
-                  validator: validarSenha,
-                ),
+                  const SizedBox(height: 8),
 
-                const SizedBox(height: 24),
+                  const Text('Acesse sua conta para continuar.'),
+                  const SizedBox(height: 32),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: entrar,
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'E-mail',
+                      prefixIcon: Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: validarEmail,
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _senhaController,
+                    obscureText: !_mostrarSenha,
+                    decoration: InputDecoration(
+                      labelText: 'Senha',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _mostrarSenha
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _mostrarSenha = !_mostrarSenha;
+                          });
+                        },
+                      ),
+                    ),
+                    validator: validarSenha,
+                  ),
+                  const SizedBox(height: 24),
+
+                  Consumer<AuthViewModel>(
+                    builder: (context, auth, child) {
+                      return SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: auth.carregando ? null : _entrar,
+                          child: auth.carregando
+                              ? const CircularProgressIndicator()
+                              : const Text('Entrar'),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/cadastro');
+                    },
                     child: const Text(
-                      'Entrar',
-                      style: TextStyle(fontSize: 18),
+                      'Ainda não tem conta? Cadastre-se',
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/cadastro');
-                  },
-                  child: const Text(
-                    'Ainda não tem conta? Cadastre-se',
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

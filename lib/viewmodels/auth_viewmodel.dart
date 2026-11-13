@@ -2,54 +2,114 @@
 import 'package:flutter/material.dart';
 
 import '../models/usuario.dart';
+import '../models/services/banco_local_service.dart';
 import '../models/services/preferences_service.dart';
 
 class AuthViewModel extends ChangeNotifier {
-  final PreferencesService _preferencesService = PreferencesService();
+  final BancoDadosLocal _banco = BancoDadosLocal.instance;
+  final PreferencesService _preferencias = PreferencesService();
 
-  bool _logado = false;
-  bool _temaEscuro = false;
+  ThemeMode _tema = ThemeMode.light;
+  bool _notificacoes = true;
+  Usuario? _usuarioLogado;
+  bool _carregando = false;
 
-  bool get logado => _logado;
-  bool get temaEscuro => _temaEscuro;
+  ThemeMode get tema => _tema;
+  bool get notificacoes => _notificacoes;
+  Usuario? get usuarioLogado => _usuarioLogado;
+  bool get carregando => _carregando;
 
-  AuthViewModel() {
-    carregarPreferencias();
-  }
+  Future<void> inicializar() async {
+    _tema = await _preferencias.carregarTema();
+    _notificacoes = await _preferencias.carregarNotificacoes();
 
-  Future<void> carregarPreferencias() async {
-    _temaEscuro = await _preferencesService.carregarTema();
     notifyListeners();
   }
 
-  Future<void> alterarTema(bool valor) async {
-    _temaEscuro = valor;
-    await _preferencesService.salvarTema(valor);
+  Future<String?> cadastrar({
+    required String nome,
+    required String email,
+    required String senha,
+    required ThemeMode tema,
+    required bool notificacoes,
+  }) async {
+    _carregando = true;
     notifyListeners();
-  }
 
-  bool login(String email, String senha) {
-    if (email.trim().isNotEmpty && senha.length >= 6) {
-      _logado = true;
+    try {
+      final usuario = Usuario(
+        nome: nome.trim(),
+        email: email.trim().toLowerCase(),
+        senha: senha,
+      );
+
+      final inserido = await _banco.inserirUsuario(usuario);
+
+      if (!inserido) {
+        return 'Este e-mail já está cadastrado.';
+      }
+
+      await _preferencias.salvarTema(tema);
+      await _preferencias.salvarNotificacoes(notificacoes);
+
+      _tema = tema;
+      _notificacoes = notificacoes;
+
+      return null;
+    } finally {
+      _carregando = false;
       notifyListeners();
-      return true;
     }
-
-    return false;
   }
 
-  bool cadastrar(Usuario usuario) {
-    if (usuario.nome.trim().isNotEmpty &&
-        usuario.email.trim().isNotEmpty &&
-        usuario.senha.length >= 6) {
-      return true;
-    }
+  Future<String?> login({
+    required String email,
+    required String senha,
+  }) async {
+    _carregando = true;
+    notifyListeners();
 
-    return false;
+    try {
+      final usuario = await _banco.autenticarUsuario(
+        email.trim(),
+        senha,
+      );
+
+      if (usuario == null) {
+        return 'E-mail ou senha incorretos.';
+      }
+
+      _usuarioLogado = usuario;
+
+      return null;
+    } finally {
+      _carregando = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<Usuario>> consultarUsuarios() async {
+    return await _banco.consultarUsuarios();
+  }
+
+  Future<void> alterarTema(ThemeMode tema) async {
+    _tema = tema;
+
+    await _preferencias.salvarTema(tema);
+
+    notifyListeners();
+  }
+
+  Future<void> alterarNotificacoes(bool valor) async {
+    _notificacoes = valor;
+
+    await _preferencias.salvarNotificacoes(valor);
+
+    notifyListeners();
   }
 
   void logout() {
-    _logado = false;
+    _usuarioLogado = null;
     notifyListeners();
   }
 }
